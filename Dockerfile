@@ -6,17 +6,19 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies and Chrome browser
+# Install dependencies
 USER root
 RUN npm ci --only=production && npm cache clean --force
-RUN npx puppeteer browsers install chrome
 
 # Copy application code
 COPY server.js ./
 
 # Change ownership to pptruser (default user in Puppeteer image)
 RUN chown -R pptruser:pptruser /app
+
+# Switch to pptruser and install Chrome browser
 USER pptruser
+RUN npx puppeteer browsers install chrome
 
 # Expose port
 EXPOSE 3000
