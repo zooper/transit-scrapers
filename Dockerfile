@@ -18,8 +18,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 # Create app directory
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup -g 1000 node && adduser -u 1000 -G node -s /bin/sh -D node
+# Node user already exists in the base image
 
 # Copy package files
 COPY package*.json ./
