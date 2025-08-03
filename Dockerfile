@@ -6,14 +6,15 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install dependencies and Chrome browser
+USER root
 RUN npm ci --only=production && npm cache clean --force
+RUN npx puppeteer browsers install chrome
 
 # Copy application code
 COPY server.js ./
 
 # Change ownership to pptruser (default user in Puppeteer image)
-USER root
 RUN chown -R pptruser:pptruser /app
 USER pptruser
 
