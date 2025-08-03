@@ -138,45 +138,10 @@ class LightRailScraper {
       });
 
       console.log('Navigating to NJ Transit page...');
-      // Try different navigation strategies to avoid timeout
-      let navigationSuccess = false;
-      const url = 'https://www.njtransit.com/dv-to?line=Hudson-Bergen%20Light%20Rail&origin=ESSEX%20STREET%20LIGHT%20RAIL%20STATION';
-      
-      // Strategy 1: domcontentloaded (faster than networkidle2)
-      try {
-        await page.goto(url, {
-          waitUntil: 'domcontentloaded',
-          timeout: 30000
-        });
-        navigationSuccess = true;
-        console.log('Navigation successful with domcontentloaded');
-      } catch (error) {
-        console.log('domcontentloaded navigation failed:', error.message);
-        
-        // Strategy 2: load event only
-        try {
-          await page.goto(url, {
-            waitUntil: 'load',
-            timeout: 30000
-          });
-          navigationSuccess = true;
-          console.log('Navigation successful with load');
-        } catch (error2) {
-          console.log('load navigation failed:', error2.message);
-          
-          // Strategy 3: No wait condition, just navigate
-          try {
-            await page.goto(url, {
-              timeout: 20000
-            });
-            navigationSuccess = true;
-            console.log('Navigation successful without wait condition');
-          } catch (error3) {
-            console.log('Basic navigation failed:', error3.message);
-            throw new Error(`All navigation strategies failed: ${error3.message}`);
-          }
-        }
-      }
+      await page.goto('https://www.njtransit.com/dv-to?line=Hudson-Bergen%20Light%20Rail&origin=ESSEX%20STREET%20LIGHT%20RAIL%20STATION', {
+        waitUntil: 'networkidle2',
+        timeout: 60000
+      });
 
       // Wait for page to load
       console.log('Waiting for data to load...');

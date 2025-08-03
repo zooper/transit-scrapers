@@ -1,24 +1,7 @@
-FROM node:18-alpine
+FROM ghcr.io/puppeteer/puppeteer:latest
 
-# Install necessary packages for Puppeteer
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont \
-    && rm -rf /var/cache/apk/*
-
-# Tell Puppeteer to skip installing Chromium. We'll be using the installed package.
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Create app directory
+# Set working directory
 WORKDIR /app
-
-# Node user already exists in the base image
 
 # Copy package files
 COPY package*.json ./
@@ -29,18 +12,17 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy application code
 COPY server.js ./
 
-# Change ownership to node user
-RUN chown -R node:node /app
-
-# Switch to non-root user
-USER node
+# Change ownership to pptruser (default user in Puppeteer image)
+USER root
+RUN chown -R pptruser:pptruser /app
+USER pptruser
 
 # Expose port
 EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+  CMD node -e "require('http').get('http://localhost:3000/api/status', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Start the application
 CMD ["npm", "start"]
