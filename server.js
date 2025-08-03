@@ -20,19 +20,12 @@ class LightRailScraper {
       status: 'initializing'
     };
     this.isRunning = false;
-    this.logFile = 'scraper-debug.log';
     this.scrapeInterval = null;
     this.scrapeIntervalMinutes = 3; // Scrape every 3 minutes
   }
 
   log(message, data = null) {
-    const timestamp = new Date().toISOString();
-    const logEntry = data 
-      ? `[${timestamp}] ${message}\n${JSON.stringify(data, null, 2)}\n`
-      : `[${timestamp}] ${message}\n`;
-    
     console.log(message, data || '');
-    fs.appendFileSync(this.logFile, logEntry);
   }
 
   async init() {
