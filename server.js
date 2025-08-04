@@ -56,8 +56,10 @@ class LightRailScraper {
       return this.lastData;
     }
 
-    // Clear previous log
-    fs.writeFileSync(this.logFile, '');
+    // Clear previous log (if log file is configured)
+    if (this.logFile) {
+      fs.writeFileSync(this.logFile, '');
+    }
     
     this.isRunning = true;
     console.log('Starting scrape operation...');
@@ -677,17 +679,115 @@ class LightRailScraper {
   }
 }
 
-// Initialize scraper
+class FerryScheduler {
+  constructor() {
+    // NY Waterway Paulus Hook to WTC schedule
+    this.weekdaySchedule = [
+      // Morning rush: 6:00-9:00 AM (every 7-8 minutes)
+      360, 367, 375, 382, 390, 397, 405, 412,
+      420, 427, 435, 442, 450, 457, 465, 472,
+      480, 487, 495, 502, 510, 517, 525, 532, 540,
+      // Mid-day: 9:15 AM - 5:45 PM (every 15 minutes)
+      555, 570, 585, 600, 615, 630, 645, 660, 675, 690, 705, 720, 735, 750, 765, 780, 795, 810, 825, 840, 855, 870, 885, 900, 915, 930, 945, 960, 975, 990, 1005, 1020, 1035, 1050, 1065,
+      // Evening: 6:00-10:45 PM (hourly plus 15,30)
+      1080, 1095, 1110, 1125, 1140, 1155, 1170, 1185, 1200, 1215, 1230, 1245, 1260, 1275, 1290, 1305, 1320, 1335, 1350, 1365, 1380, 1395, 1410, 1425, 1440, 1455, 1470, 1485, 1500, 1515, 1530, 1545, 1560, 1575, 1590, 1605, 1620, 1635, 1645
+    ];
+    
+    // Weekend schedule: 10:10 AM - 7:40 PM (every 30 minutes)
+    this.weekendSchedule = [
+      610, 640, 670, 700, 730, 760, 790, 820, 850, 880, 910, 940, 970, 1000, 1030, 1060, 1090, 1120, 1150, 1180
+    ];
+  }
+  
+  getCurrentTime() {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  }
+  
+  isWeekday() {
+    return new Date().getDay() >= 1 && new Date().getDay() <= 5;
+  }
+  
+  formatTime(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  }
+  
+  getNextDeparture() {
+    const currentTime = this.getCurrentTime();
+    const schedule = this.isWeekday() ? this.weekdaySchedule : this.weekendSchedule;
+    
+    // Find next departure
+    const nextDeparture = schedule.find(time => time > currentTime);
+    
+    if (!nextDeparture) {
+      return {
+        status: 'Service ended',
+        nextDepartureTime: '--:--',
+        minutesUntil: null,
+        scheduleType: this.isWeekday() ? 'Weekday' : 'Weekend',
+        lastUpdated: new Date().toISOString()
+      };
+    }
+    
+    const minutesUntil = nextDeparture - currentTime;
+    let status;
+    
+    if (minutesUntil <= 0) {
+      status = 'Departed';
+    } else if (minutesUntil === 1) {
+      status = 'in 1 min';
+    } else {
+      status = `in ${minutesUntil} mins`;
+    }
+    
+    return {
+      status: status,
+      nextDepartureTime: this.formatTime(nextDeparture),
+      minutesUntil: minutesUntil,
+      scheduleType: this.isWeekday() ? 'Weekday' : 'Weekend',
+      lastUpdated: new Date().toISOString()
+    };
+  }
+  
+  getAllUpcomingDepartures(count = 3) {
+    const currentTime = this.getCurrentTime();
+    const schedule = this.isWeekday() ? this.weekdaySchedule : this.weekendSchedule;
+    
+    const upcoming = schedule
+      .filter(time => time > currentTime)
+      .slice(0, count)
+      .map(time => ({
+        departureTime: this.formatTime(time),
+        minutesUntil: time - currentTime,
+        status: time - currentTime === 1 ? 'in 1 min' : `in ${time - currentTime} mins`
+      }));
+    
+    return {
+      upcoming: upcoming,
+      scheduleType: this.isWeekday() ? 'Weekday' : 'Weekend',
+      lastUpdated: new Date().toISOString()
+    };
+  }
+}
+
+// Initialize scraper and ferry scheduler
 const scraper = new LightRailScraper();
+const ferryScheduler = new FerryScheduler();
 
 // Routes
 app.get('/', (req, res) => {
   res.json({
-    service: 'NJ Transit Light Rail Scraper',
+    service: 'NJ Transit Light Rail & Ferry Scraper',
     status: 'running',
     endpoints: {
-      departures: '/api/departures',
-      status: '/api/status'
+      'light-rail-departures': '/api/departures',
+      'light-rail-status': '/api/status',
+      'ferry-next': '/api/ferry',
+      'ferry-upcoming': '/api/ferry/upcoming',
+      northbound: '/api/northbound',
+      southbound: '/api/southbound'
     }
   });
 });
@@ -750,6 +850,32 @@ app.get('/api/northbound', (req, res) => {
   }
 });
 
+// Ferry API endpoints
+app.get('/api/ferry', (req, res) => {
+  try {
+    const ferryData = ferryScheduler.getNextDeparture();
+    res.json(ferryData);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to get ferry data',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/ferry/upcoming', (req, res) => {
+  try {
+    const count = parseInt(req.query.count) || 3;
+    const ferryData = ferryScheduler.getAllUpcomingDepartures(count);
+    res.json(ferryData);
+  } catch (error) {
+    res.status(500).json({
+      error: 'Failed to get upcoming ferry data',
+      message: error.message
+    });
+  }
+});
+
 app.get('/api/southbound', (req, res) => {
   try {
     const data = scraper.getCachedData();
@@ -773,14 +899,19 @@ async function start() {
     await scraper.init();
     
     app.listen(PORT, () => {
-      console.log(`🚋 Light Rail scraper running on port ${PORT}`);
+      console.log(`🚋 Light Rail & Ferry API running on port ${PORT}`);
       console.log(`📊 API endpoints:`);
+      console.log(`   Light Rail:`);
       console.log(`   - http://localhost:${PORT}/api/departures`);
       console.log(`   - http://localhost:${PORT}/api/northbound`);
       console.log(`   - http://localhost:${PORT}/api/southbound`);
       console.log(`   - http://localhost:${PORT}/api/status`);
+      console.log(`   Ferry:`);
+      console.log(`   - http://localhost:${PORT}/api/ferry`);
+      console.log(`   - http://localhost:${PORT}/api/ferry/upcoming`);
       console.log(`⚡ Features:`);
-      console.log(`   - Scheduled scraping every ${scraper.scrapeIntervalMinutes} minutes`);
+      console.log(`   - Scheduled light rail scraping every ${scraper.scrapeIntervalMinutes} minutes`);
+      console.log(`   - Real-time ferry schedule calculations`);
       console.log(`   - Instant API responses from cached data`);
       console.log(`   - Real-time countdown calculations`);
       
