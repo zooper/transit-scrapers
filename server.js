@@ -90,6 +90,7 @@ class LightRailScraper {
           if (url.includes('graphql') && response.request().method() === 'POST') {
             console.log(`Intercepted GraphQL response: ${url}`);
             const responseData = await response.json();
+            console.log('Full GraphQL response:', JSON.stringify(responseData, null, 2));
             
             // Look for various possible data structures
             if (responseData.data) {
@@ -119,6 +120,9 @@ class LightRailScraper {
                 } else if (responseData.data.departures) {
                   console.log(`Found departures with ${responseData.data.departures.length} departures`);
                   graphqlData = responseData.data.departures;
+                } else if (responseData.data.lightRailDV) {
+                  console.log(`Found lightRailDV with ${responseData.data.lightRailDV.length} departures`);
+                  graphqlData = responseData.data.lightRailDV;
                 } else if (responseData.data.getSystemStatus) {
                   console.log('Found system status data (no departures)');
                 } else {
